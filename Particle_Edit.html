@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Particle_Edit</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <style>
+        body {
+            color: #cccccc;
+            font-family:Monospace;
+            font-size:13px;
+            text-align:center;
+
+            background-color: #000000;
+            margin: 0px;
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body>
+
+<div id="container"></div>
+
+<script src="js/dat.gui.min.js"></script>
+<script src="js/three.js"></script>
+<script src="js/OrbitControls.js"></script>
+<script src="js/stats.min.js"></script>
+
+<script>
+
+    var group;
+    var container, stats;
+    var particlesData = [];
+    var scene, renderer;
+    var positions, colors;
+    var particles;
+    var pointCloud;			//点
+    var particlePositions;
+    var linesMesh;			//点之间的线
+
+    var maxParticleCount = 1000;
+    var particleCount = 500;
+    var r = 800;
+    var rHalf = r / 2;
+
+    var effectController = {
+        showDots: true,    			//是否显示点
+        showLines: true,   			//是否显示点
+        minDistance: 150,           //表示连接线的最短距离，超过最短距离则不画出连接线（范围10-300，默认150）
+        limitConnections: false,	//当minDistance足够大的时候，限制连接线数量（连接线数量会减少）
+        maxConnections: 20,			//一个点最多能连接多少连接线（范围0-30，默认20）
+        particleCount: 500			//点的数量
+    };
+
+    var views = [
+        //左上,朝-z看，Top
+        {
+            left: 0,
+            top: 0,
+            width: 0.45,
+            height: 0.45,
+            background: new THREE.Color( 0x000000 ),
+            eye: [ 0, 0, 3000],
+            up: [ 0, 1, 0 ],
+            fov: 45,
+            updateCamera: function ( camera, scene) {
+                camera.lookAt( scene.position );
+            }
+        },
+        //左下，向左看
+        {
+            left: 0,
+            top: 0.46,
+            width: 0.45,
+            height: 0.45,
+            background: new THREE.Color( 0x000000 ),
+            eye: [ 0, 3000, 0 ],
+            up: [ 0, 1, 0 ],
+            fov: 45,
+            updateCamera: function ( camera, scene ) {
+                camera.lookAt( scene.position );
+            }
+        },
+        //右下
+        {
+            left: 0.455,
+            top: 0.46,
+            width: 0.45,
+            height: 0.45,
+            background: new THREE.Color( 0x000000 ),
+            eye: [ 3000, 0, 0 ],
+            up: [ 0, 1, 0 ],
+            fov: 45,
+            updateCamera: function ( camera, scene ) {
+                camera.lookAt( scene.position );
+            }
+        },
+        //右上
+        {
+            left: 0.455,
+            top: 0,
+            width: 0.45,
+            height: 0.45,
+            background: new THREE.Color( 0x000000 ),
+            eye: [ 1000, 500, 500 ],
+            up: [ 0, 1, 0 ],
+            fov: 45,
+            updateCamera: function ( camera, scene ) {
+                camera.lookAt( scene.position );
+            }
+        }
+    ];
+
+
+    init();
+    animate();
+
+    function initGUI() {
+
+        var gui = new dat.GUI();
+
+        gui.add( effectController, "showDots" ).onChange( function( value ) { pointCloud.visible = value; } );
+        gui.add( effectController, "showLines" ).onChange( function( value ) { linesMesh.visible = value; } );
+        gui.add( effectController, "minDistance", 10, 300 );
+        gui.add( effectController, "limitConnections" );
+        gui.add( effectController, "maxConnections", 0, 30, 1 );
+        gui.add( effectController, "particleCount", 0, maxParticleCount, 1 ).onChange( function( value ) {
+
+            particleCount = parseInt( value );
+            particles.setDrawRange( 0, particleCount );
+
+        });
+
+    }
+
+    function init() {
+
+        initGUI();
+
+        container = document.getElementById( 'container' );
+
+        //camera view setting
+
+        for (let ii =  0; ii < views.length; ++ii ) {
+            let view = views[ii];
+            let camera = new THREE.PerspectiveCamera( view.fov, window.innerWidth / window.innerHeight, 1, 3000 );
+            camera.position.fromArray( view.eye );
+            camera.up.fromArray( view.up );
+            view.camera = camera;
+
+            //用户交互插件 鼠标左键按住旋转，右键按住平移，滚轮缩放 
+            let controls = new THREE.OrbitControls( view.camera, container );
+        }
+
+        scene = new THREE.Scene();
+
+        //创建一个组
+        group = new THREE.Group();
+        scene.add( group );
+
+        //BoxHelper包围盒辅助工具，创建一个“矩形框”包围盒
+        var helper = new THREE.BoxHelper( new THREE.Mesh( new THREE.BoxBufferGeometry( r, r, r ) ) );
+        helper.material.color.setHex( 0x080808 );
+        helper.material.blending = THREE.AdditiveBlending;
+        helper.material.transparent = true;
+        group.add( helper );
+
+        var segments = maxParticleCount * maxParticleCount;
+
+        positions = new Float32Array( segments * 3 );
+        colors = new Float32Array( segments * 3 );
+
+        var pMaterial = new THREE.PointsMaterial( {
+            // color: 0xFFFFFF,
+            color: 0x188eee,
+            size: 3,
+            //blending: THREE.AdditiveBlending,
+            transparent: true,
+            sizeAttenuation: false
+        } );
+
+        particlePositions = new Float32Array( maxParticleCount * 3 );
+
+        for ( var i = 0; i < maxParticleCount; i++ ) {
+
+            var x = Math.random() * r - r / 2;
+            var y = Math.random() * r - r / 2;
+            var z = Math.random() * r - r / 2;
+
+            particlePositions[ i * 3     ] = x;
+            particlePositions[ i * 3 + 1 ] = y;
+            particlePositions[ i * 3 + 2 ] = z;
+
+            // add it to the geometry
+            particlesData.push( {
+                velocity: new THREE.Vector3( -1 + Math.random() * 2, -1 + Math.random() * 2,  -1 + Math.random() * 2 ),
+                numConnections: 0
+            } );
+
+        }
+
+		particles = new THREE.BufferGeometry();
+        particles.setDrawRange( 0, particleCount );
+        particles.addAttribute( 'position', new THREE.BufferAttribute( particlePositions, 3 ).setDynamic( true ) );
+
+        // create the particle system
+        pointCloud = new THREE.Points( particles, pMaterial );
+        group.add( pointCloud );
+
+        var geometry = new THREE.BufferGeometry();
+
+        geometry.addAttribute( 'position', new THREE.BufferAttribute( positions, 3 ).setDynamic( true ) );
+        geometry.addAttribute( 'color', new THREE.BufferAttribute( colors, 3 ).setDynamic( true ) );
+
+        geometry.computeBoundingSphere();
+
+        geometry.setDrawRange( 0, 0 );
+
+        var material = new THREE.LineBasicMaterial( {
+            vertexColors: THREE.VertexColors,
+            //blending: THREE.AdditiveBlending,
+            transparent: true
+        } );
+
+        linesMesh = new THREE.LineSegments( geometry, material );
+        group.add( linesMesh );
+
+        //
+
+        renderer = new THREE.WebGLRenderer( { antialias: true } );
+        renderer.setPixelRatio( window.devicePixelRatio );
+        renderer.setSize( window.innerWidth, window.innerHeight );
+
+        renderer.gammaInput = true;
+        renderer.gammaOutput = true;
+
+        container.appendChild( renderer.domElement );
+
+        //
+
+        stats = new Stats();
+        container.appendChild( stats.dom );
+
+        window.addEventListener( 'resize', onWindowResize, false );
+
+    }
+
+    function onWindowResize() {
+
+        let Width  = window.innerWidth/1.05;
+        let Height = window.innerWidth/1.65;
+
+        renderer.setSize ( Width, Height );
+    }
+
+    function animate() {
+
+        var vertexpos = 0;
+        var colorpos = 0;
+        var numConnected = 0;
+
+        for ( var i = 0; i < particleCount; i++ )
+            particlesData[ i ].numConnections = 0;
+
+        for ( var i = 0; i < particleCount; i++ ) {
+
+            // get the particle
+            var particleData = particlesData[i];
+
+            particlePositions[ i * 3     ] += particleData.velocity.x;
+            particlePositions[ i * 3 + 1 ] += particleData.velocity.y;
+            particlePositions[ i * 3 + 2 ] += particleData.velocity.z;
+
+            if ( particlePositions[ i * 3 + 1 ] < -rHalf || particlePositions[ i * 3 + 1 ] > rHalf )
+                particleData.velocity.y = -particleData.velocity.y;
+
+            if ( particlePositions[ i * 3 ] < -rHalf || particlePositions[ i * 3 ] > rHalf )
+                particleData.velocity.x = -particleData.velocity.x;
+
+            if ( particlePositions[ i * 3 + 2 ] < -rHalf || particlePositions[ i * 3 + 2 ] > rHalf )
+                particleData.velocity.z = -particleData.velocity.z;
+
+            if ( effectController.limitConnections && particleData.numConnections >= effectController.maxConnections )
+                continue;
+
+            // Check collision
+            for ( var j = i + 1; j < particleCount; j++ ) {
+
+                var particleDataB = particlesData[ j ];
+                if ( effectController.limitConnections && particleDataB.numConnections >= effectController.maxConnections )
+                    continue;
+
+                var dx = particlePositions[ i * 3     ] - particlePositions[ j * 3     ];
+                var dy = particlePositions[ i * 3 + 1 ] - particlePositions[ j * 3 + 1 ];
+                var dz = particlePositions[ i * 3 + 2 ] - particlePositions[ j * 3 + 2 ];
+                var dist = Math.sqrt( dx * dx + dy * dy + dz * dz );
+
+                if ( dist < effectController.minDistance ) {
+
+                    particleData.numConnections++;
+                    particleDataB.numConnections++;
+
+                    var alpha = 1.0 - dist / effectController.minDistance;
+
+                    positions[ vertexpos++ ] = particlePositions[ i * 3     ];
+                    positions[ vertexpos++ ] = particlePositions[ i * 3 + 1 ];
+                    positions[ vertexpos++ ] = particlePositions[ i * 3 + 2 ];
+
+                    positions[ vertexpos++ ] = particlePositions[ j * 3     ];
+                    positions[ vertexpos++ ] = particlePositions[ j * 3 + 1 ];
+                    positions[ vertexpos++ ] = particlePositions[ j * 3 + 2 ];
+
+                    colors[ colorpos++ ] = alpha;
+                    colors[ colorpos++ ] = alpha;
+                    colors[ colorpos++ ] = alpha;
+
+                    colors[ colorpos++ ] = alpha;
+                    colors[ colorpos++ ] = alpha;
+                    colors[ colorpos++ ] = alpha;
+
+                    numConnected++;
+                }
+            }
+        }
+
+
+        linesMesh.geometry.setDrawRange( 0, numConnected * 2 );
+        linesMesh.geometry.attributes.position.needsUpdate = true;
+        linesMesh.geometry.attributes.color.needsUpdate = true;
+
+        pointCloud.geometry.attributes.position.needsUpdate = true;
+
+        requestAnimationFrame( animate );
+
+        stats.update();
+        render();
+
+    }
+
+    function render() {
+
+
+        for ( let ii = 0; ii < views.length; ++ii ) {
+
+            let view = views[ii];
+            let camera = view.camera;
+
+            view.updateCamera(camera, scene);
+
+            let Width  = window.innerWidth/1.05;
+            let Height = window.innerWidth/1.65;
+
+            //从规格化的视口转变为屏幕坐标
+            let left = Math.floor(Width * view.left);
+            let top = Math.floor(Height * view.top);
+            let width = Math.floor(Width * view.width);
+            let height = Math.floor(Height * view.height);
+
+            //设置视口在屏幕上的位置
+            renderer.setViewport(left, top, width, height);
+            renderer.setScissor(left, top, width, height);
+            renderer.setScissorTest(true);
+            renderer.setClearColor(view.background);
+
+            camera.aspect = 1;
+            //camera.aspect = width / height;
+            camera.updateProjectionMatrix();
+
+            let time = Date.now() * 0.001;
+
+            group.rotation.y = time * 0.1;
+            renderer.render(scene, camera);
+        }
+    }
+
+</script>
+</body>
+</html>
