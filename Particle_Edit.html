@@ -59,13 +59,36 @@
     var r = 800;
     var rHalf = r / 2;
 
+    if (window.XMLHttpRequest)
+    {// code for IE7+, Firefox, Chrome, Opera, Safari
+        xmlhttp=new XMLHttpRequest();
+    }
+    else
+    {// code for IE6, IE5
+        xmlhttp=new ActiveXObject("Microsoft.XMLHTTP");
+    }
+    xmlhttp.open("GET","property.xml",false);
+    xmlhttp.send();
+    xmlDoc=xmlhttp.responseXML;
+
+
+    // 读取xml数据
+    // var effectController = {
+    //     showDots: true,    			//是否显示点
+    //     showLines: true,   			//是否显示点
+    //     minDistance: 150,           //表示连接线的最短距离，超过最短距离则不画出连接线（范围10-300，默认150）
+    //     limitConnections: false,	//当minDistance足够大的时候，限制连接线数量（连接线数量会减少）
+    //     maxConnections: 20,			//一个点最多能连接多少连接线（范围0-30，默认20）
+    //     particleCount: 500			//点的数量
+    // };
+
     var effectController = {
-        showDots: true,    			//是否显示点
-        showLines: true,   			//是否显示点
-        minDistance: 150,           //表示连接线的最短距离，超过最短距离则不画出连接线（范围10-300，默认150）
-        limitConnections: false,	//当minDistance足够大的时候，限制连接线数量（连接线数量会减少）
-        maxConnections: 20,			//一个点最多能连接多少连接线（范围0-30，默认20）
-        particleCount: 500			//点的数量
+        showDots: xmlDoc.getElementsByTagName("showDots")[0].childNodes[0].nodeValue === "true",    			//是否显示点
+        showLines: xmlDoc.getElementsByTagName("showLines")[0].childNodes[0].nodeValue === "true",   			//是否显示点
+        minDistance: xmlDoc.getElementsByTagName("minDistance")[0].childNodes[0].nodeValue,           //表示连接线的最短距离，超过最短距离则不画出连接线（范围10-300，默认150）
+        limitConnections: xmlDoc.getElementsByTagName("limitConnections")[0].childNodes[0].nodeValue === "true",	//当minDistance足够大的时候，限制连接线数量（连接线数量会减少）
+        maxConnections: xmlDoc.getElementsByTagName("maxConnections")[0].childNodes[0].nodeValue,			//一个点最多能连接多少连接线（范围0-30，默认20）
+        particleCount: xmlDoc.getElementsByTagName("particleCount")[0].childNodes[0].nodeValue			//点的数量
     };
 
     //读出xml给上面effectController里的属性赋值
