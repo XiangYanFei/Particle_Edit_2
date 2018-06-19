@@ -32,15 +32,15 @@
     </style>
 </head>
 <body>
-
 <div id="container">
-    <button class="save-btn" onclick="writeProperties()" type="button" name="save">save</button>
+<button class="save-btn" onclick="writeProperties()" type="button" name="save">save</button>
 </div>
 
 <script src="js/dat.gui.min.js"></script>
 <script src="js/three.js"></script>
 <script src="js/OrbitControls.js"></script>
 <script src="js/stats.min.js"></script>
+<script src="js/FileSaver.js"></script>
 
 <script>
 
@@ -72,7 +72,6 @@
     xmlDoc=xmlhttp.responseXML;
 
 
-    // 读取xml数据
     // var effectController = {
     //     showDots: true,    			//是否显示点
     //     showLines: true,   			//是否显示点
@@ -82,6 +81,7 @@
     //     particleCount: 500			//点的数量
     // };
 
+    //读出xml给effectController里的属性赋值
     var effectController = {
         showDots: xmlDoc.getElementsByTagName("showDots")[0].childNodes[0].nodeValue === "true",    			//是否显示点
         showLines: xmlDoc.getElementsByTagName("showLines")[0].childNodes[0].nodeValue === "true",   			//是否显示点
@@ -90,9 +90,6 @@
         maxConnections: xmlDoc.getElementsByTagName("maxConnections")[0].childNodes[0].nodeValue,			//一个点最多能连接多少连接线（范围0-30，默认20）
         particleCount: xmlDoc.getElementsByTagName("particleCount")[0].childNodes[0].nodeValue			//点的数量
     };
-
-    //读出xml给上面effectController里的属性赋值
-    //readProperties();
 
     var views = [
         //左上,朝-z看，Top
@@ -413,6 +410,73 @@
             group.rotation.y = time * 0.1;
             renderer.render(scene, camera);
         }
+    }
+
+    // 将当前属性参数保存到本地property.xml文件中
+    function writeProperties() {
+        function CreatXmlDoc(obj){
+            this.tagName=obj.tagName;
+            var children=obj.children.map(function(item){
+                if(typeof item =="object")
+                {
+                    item=new CreatXmlDoc(item)
+                }
+                return item
+            });
+            this.children=children;
+        }
+
+        CreatXmlDoc.prototype.render=function(){
+            var el=document.createElement(this.tagName);
+            var children=this.children || [];
+            children.forEach(function(child){
+                var childEl=(child instanceof CreatXmlDoc)
+                    ? child.render()
+                    :document.createTextNode(child);
+                el.appendChild(childEl);
+            });
+            return el
+        };
+
+        var obj={
+            tagName:'Property',
+            children:[
+                {
+                    tagName:'showDots',
+                    children:[effectController.showDots]
+                },
+                {
+                    tagName:'showLines',
+                    children:[effectController.showLines]
+                },
+                {
+                    tagName:'minDistance',
+                    children:[effectController.minDistance]
+                },
+                {
+                    tagName:'limitConnections',
+                    children:[effectController.limitConnections]
+                },
+                {
+                    tagName:'maxConnections',
+                    children:[effectController.maxConnections]
+                },
+                {
+                    tagName:'particleCount',
+                    children:[effectController.particleCount]
+                }
+            ]
+        };
+
+        doc  = new CreatXmlDoc(obj);
+        PropertySerial = '<?xml version="1.0" encoding="utf-8" standalone="yes" ?>';
+        PropertySerial +=(new XMLSerializer()).serializeToString(doc.render());
+
+        var reg = new RegExp(' xmlns="http://www.w3.org/1999/xhtml"',"g");
+        PropertySerial=PropertySerial.replace(reg,"");
+
+        var file = new File([PropertySerial], "property.xml", { type: "text/plain;charset=utf-8" });
+        saveAs(file);
     }
 
 </script>
