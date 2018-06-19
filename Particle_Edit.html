@@ -15,11 +15,27 @@
             margin: 0px;
             overflow: hidden;
         }
+         .save-btn{
+            display: block;
+            background: #188eee;
+            height: 35px;
+            color: #fff;
+            border: 0;
+            width: 100px;
+            border-radius: 10px;
+            /* padding: 0; */
+            font-size: 18px;
+            position: fixed;
+            right: 0;
+            bottom: 0
+        }
     </style>
 </head>
 <body>
 
-<div id="container"></div>
+<div id="container">
+    <button class="save-btn" onclick="writeProperties()" type="button" name="save">save</button>
+</div>
 
 <script src="js/dat.gui.min.js"></script>
 <script src="js/three.js"></script>
@@ -51,6 +67,9 @@
         maxConnections: 20,			//一个点最多能连接多少连接线（范围0-30，默认20）
         particleCount: 500			//点的数量
     };
+
+    //读出xml给上面effectController里的属性赋值
+    //readProperties();
 
     var views = [
         //左上,朝-z看，Top
